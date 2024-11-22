@@ -1,6 +1,8 @@
 import os
 import cv2 as cv
 import logging
+from PIL import Image
+
 
 class ExDark:
     def __init__(self, filepath):
@@ -86,12 +88,14 @@ class ExDark:
             return None
         
         image = cv.imread(image_path)
+        image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+        image = Image.fromarray(image_rgb)
         
         if image is None or image.size == 0:
             logging.error(f"Failed to load image or image is empty: {image_path}")
             return None
         
-        logging.info(f"Image loaded successfully: {image_path}, Shape: {image.shape}")
+        #logging.info(f"Image loaded successfully: {image_path}, Shape: {image.shape}")
         return image
 
 
