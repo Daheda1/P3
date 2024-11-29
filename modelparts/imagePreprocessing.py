@@ -73,8 +73,8 @@ def scale_bounding_boxes(ground_truth, resize_ratio, padding, divideable_by=32):
         t_padded = t_scaled + padding[1]
 
         # Adjust dimensions to be divisible by `divideable_by`
-        w_scaled = round(w_scaled / divideable_by) * divideable_by
-        h_scaled = round(h_scaled / divideable_by) * divideable_by
+        #w_scaled = round(w_scaled / divideable_by) * divideable_by
+        #h_scaled = round(h_scaled / divideable_by) * divideable_by
 
         # Convert to integers
         adjusted_bbox = [

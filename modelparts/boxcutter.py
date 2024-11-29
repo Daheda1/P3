@@ -28,7 +28,7 @@ def crop_bounding_boxes(image: torch.Tensor, boxes: list, overlap_threshold: flo
         image_b = image[b]  # Shape: [C, H, W]
         boxes_b = boxes[b]  # List of boxes for image b
 
-        show_tensor_image(image_b)
+        #show_tensor_image(image_b)
 
         labels = [box[0] for box in boxes_b]
         box_coords = [box[1:] for box in boxes_b]  # [l, t, w, h]
@@ -57,6 +57,7 @@ def crop_bounding_boxes(image: torch.Tensor, boxes: list, overlap_threshold: flo
 
             # Add batch dimension back
             crop = crop.unsqueeze(0)  # Shape: [1, C, H_i, W_i]
+            crop = crop.requires_grad_(True)
             crops.append(crop)
 
             # Initialize overlapping labels list

@@ -4,7 +4,7 @@
 #SBATCH --error=error_%j.err
 #SBATCH --time=12:00:00
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=8
 #SBATCH --mem=16G
 
 # Number of GPUs to allocate (adjust this value as needed)
