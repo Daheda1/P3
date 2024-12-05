@@ -3,7 +3,7 @@ import torch
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=1):
+    def __init__(self, in_channels=3, out_channels=3):
         super(UNet, self).__init__()
         
         def conv_block(in_dim, out_dim):
@@ -37,8 +37,10 @@ class UNet(nn.Module):
         self.dec1 = conv_block(128, 64)
         
         self.final = nn.Conv2d(64, out_channels, kernel_size=1)
+        self.activation = nn.Sigmoid()  # Add Sigmoid activation
     
     def forward(self, x):
+        
         enc1 = self.enc1(x)
         pool1 = self.pool1(enc1)
         
@@ -70,4 +72,5 @@ class UNet(nn.Module):
         dec1 = self.dec1(merge1)
         
         out = self.final(dec1)
+        out = self.activation(out)  # Apply Sigmoid activation
         return out

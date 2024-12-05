@@ -41,7 +41,35 @@ def scale_image(image, target_size, divideable_by=32):
     return scaled_image, resize_ratio
 
 
-def scale_bounding_boxes(ground_truth, resize_ratio, padding, divideable_by=32):
+def pad_image_to_target(image, target_size):
+    """
+    Pads an image to center it within the target size.
+
+    Args:
+        image (PIL.Image.Image): The input image to be padded.
+        target_size (tuple): The target size (width, height) for the output image.
+
+    Returns:
+        PIL.Image.Image: The padded image.
+        tuple: Padding values (pad_left, pad_top, pad_right, pad_bottom).
+    """
+    original_width, original_height = image.size
+    target_width, target_height = target_size
+
+    # Calculate padding
+    pad_left = (target_width - original_width) // 2
+    pad_top = (target_height - original_height) // 2
+    pad_right = target_width - original_width - pad_left
+    pad_bottom = target_height - original_height - pad_top
+
+    # Apply padding
+    padding = (pad_left, pad_top, pad_right, pad_bottom)
+    padded_image = ImageOps.expand(image, border=padding, fill=(0, 0, 0))  # Fill with black (or specify a color)
+
+    return padded_image, padding
+
+
+def scale_bounding_boxes(ground_truth, resize_ratio, padding):
     """
     Scales bounding boxes to match the image scaling factor and ensures dimensions are divisible by a specified value.
 
@@ -88,34 +116,30 @@ def scale_bounding_boxes(ground_truth, resize_ratio, padding, divideable_by=32):
 
     return adjusted_ground_truth
 
-
-def pad_image_to_target(image, target_size):
+def convert_to_ultralytics_format(ground_truth, target_size):
     """
-    Pads an image to center it within the target size.
+    Converts ground truth bounding boxes to Ultralytics YOLO format.
 
     Args:
-        image (PIL.Image.Image): The input image to be padded.
-        target_size (tuple): The target size (width, height) for the output image.
+        ground_truth: List of bounding boxes in the format [class_id, l, t, w, h]
+        img_width: Width of the image
+        img_height: Height of the image
 
     Returns:
-        PIL.Image.Image: The padded image.
-        tuple: Padding values (pad_left, pad_top, pad_right, pad_bottom).
+        List of bounding boxes in the format [class_id, x_center, y_center, width, height]
     """
-    original_width, original_height = image.size
-    target_width, target_height = target_size
+    yolo_format = []
 
-    # Calculate padding
-    pad_left = (target_width - original_width) // 2
-    pad_top = (target_height - original_height) // 2
-    pad_right = target_width - original_width - pad_left
-    pad_bottom = target_height - original_height - pad_top
+    for box in ground_truth:
+        class_id, l, t, w, h = box
+        x_center = (l + w / 2) / target_size[0]
+        y_center = (t + h / 2) / target_size[1]
+        norm_width = w / target_size[0]
+        norm_height = h / target_size[1]
 
-    # Apply padding
-    padding = (pad_left, pad_top, pad_right, pad_bottom)
-    padded_image = ImageOps.expand(image, border=padding, fill=(0, 0, 0))  # Fill with black (or specify a color)
+        yolo_format.append([class_id, x_center, y_center, norm_width, norm_height])
 
-    return padded_image, padding
-
+    return yolo_format
 
 from PIL import Image, ImageDraw
 

@@ -30,9 +30,6 @@ def _compute_single_loss(image, ground_truth, class_ids, model):
         image = image.unsqueeze(0)  # Add batch dimension if missing
     image = image.requires_grad_()
 
-    # Get image dimensions
-    _, _, img_height, img_width = image.shape
-
     # Prepare lists for class labels and bounding boxes
     cls_list = []
     bboxes_list = []
@@ -40,16 +37,10 @@ def _compute_single_loss(image, ground_truth, class_ids, model):
 
     for gt in ground_truth:
         for gt_item in gt:
-            class_id, l, t, w, h = gt_item
-
-            # Normalize bounding box coordinates to [0, 1]
-            x_center = (l + w / 2) / img_width
-            y_center = (t + h / 2) / img_height
-            norm_width = w / img_width
-            norm_height = h / img_height
+            class_id, x_center, y_center, width, height = gt_item
 
             cls_list.append([class_id])  # Class IDs as [class_id]
-            bboxes_list.append([x_center, y_center, norm_width, norm_height])
+            bboxes_list.append([x_center, y_center, width, height])
             batch_idx_list.append(0)  # Assuming single image per batch item
 
     # Convert lists to tensors
@@ -64,6 +55,7 @@ def _compute_single_loss(image, ground_truth, class_ids, model):
         'batch_idx': batch_idx_tensor # Shape: [num_boxes]
     }
 
+    
     # Perform forward pass
     pred = model.model(image)
 

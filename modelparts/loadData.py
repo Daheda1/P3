@@ -2,6 +2,12 @@ import os
 import cv2 as cv
 import logging
 from PIL import Image
+import torch
+from torch.utils.data import Dataset, DataLoader
+from modelparts.imagePreprocessing import scale_image, scale_bounding_boxes, pad_image_to_target, convert_to_ultralytics_format
+import torchvision.transforms.functional as TF
+
+
 
 
 class ExDark:
@@ -112,3 +118,61 @@ if __name__ == "__main__":
             image = dataset.load_image(image_name)
             if image is not None:
                 print(f"Image {image_name} loaded successfully.")
+
+
+class ExDarkDataset(Dataset):
+    def __init__(self, dataset, image_paths, target_size=(640, 640), transform=None, divideable_by=32):
+        self.dataset = dataset
+        self.image_paths = image_paths
+        self.target_size = target_size  # (width, height)
+        self.transform = transform
+        self.divideable_by = divideable_by
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        image_name = self.image_paths[idx]
+        image = self.dataset.load_image(image_name)
+        ground_truth = self.dataset.load_ground_truth(image_name)
+
+        image, resize_ratio = scale_image(image, self.target_size, self.divideable_by)
+        image, padding = pad_image_to_target(image, self.target_size)
+        ground_truth = scale_bounding_boxes(ground_truth, resize_ratio, padding)
+        ground_truth = convert_to_ultralytics_format(ground_truth, self.target_size)
+
+        # Ensure the final image size is as expected
+        assert image.size == (self.target_size[0], self.target_size[1]), (
+            f"Image size after padding is {image.size}, expected {self.target_size}"
+        )
+
+        # Convert image to tensor
+        image_tensor = TF.to_tensor(image)  # Automatically scales to [0,1]
+
+        sample = {
+            'image': image_tensor,
+            'Org_image': image_tensor,
+            'ground_truth': ground_truth,
+            'padding': padding,
+            'image_name': image_name  # Maybe not needed
+        }
+
+        if self.transform:
+            sample = self.transform(sample)
+
+        return sample
+    
+
+
+
+def custom_collate_fn(batch):
+    batch_element = batch[0]
+    collated_batch = {}
+    for key in batch_element:
+        if key in ['padding', 'ground_truth', 'image_name']:
+            # Keep these as lists without collating into tensors
+            collated_batch[key] = [d[key] for d in batch]
+        else:
+            # Use default collation for other fields
+            collated_batch[key] = torch.stack([d[key] for d in batch], dim=0)
+    return collated_batch
