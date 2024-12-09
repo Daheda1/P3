@@ -5,21 +5,16 @@ from PIL import Image
 import torchvision.transforms as transforms
 import sys
 import os
+import logging
 
-# Load YOLO model and set it to training mode
-model = YOLO("yolo11n.pt")
-model.model.requires_grad_()
-model.model.train()
-model.model.args = IterableSimpleNamespace(box=7.5, cls=0.5, dfl=1.5)
 
-def _compute_single_loss(image, ground_truth, class_ids, model):
+def _compute_single_loss(image, ground_truth, yolo_model):
     """
     Computes YOLO loss for a single set of images.
 
     Args:
         image (torch.Tensor): Batch of input images in BCHW format with RGB channels, normalized [0.0, 1.0].
         ground_truth (list): List of bounding boxes and classes in format [class, l, t, w, h].
-        class_ids (list): List of class IDs.
         model (YOLO): The YOLO model instance.
 
     Returns:
@@ -29,19 +24,20 @@ def _compute_single_loss(image, ground_truth, class_ids, model):
     if image.dim() == 3:
         image = image.unsqueeze(0)  # Add batch dimension if missing
     image = image.requires_grad_()
+    image = image.to(yolo_model.device)
 
     # Prepare lists for class labels and bounding boxes
     cls_list = []
     bboxes_list = []
     batch_idx_list = []
 
-    for gt in ground_truth:
+    for i, gt in enumerate(ground_truth):
         for gt_item in gt:
             class_id, x_center, y_center, width, height = gt_item
 
             cls_list.append([class_id])  # Class IDs as [class_id]
             bboxes_list.append([x_center, y_center, width, height])
-            batch_idx_list.append(0)  # Assuming single image per batch item
+            batch_idx_list.append(i)  # Batch index
 
     # Convert lists to tensors
     cls_tensor = torch.tensor(cls_list, dtype=torch.float32, device=image.device)
@@ -55,19 +51,20 @@ def _compute_single_loss(image, ground_truth, class_ids, model):
         'batch_idx': batch_idx_tensor # Shape: [num_boxes]
     }
 
-    
     # Perform forward pass
-    pred = model.model(image)
+    pred = yolo_model.model(image)
 
-    # Compute loss using YOLO's internal loss function
-    loss = model.model.loss(train_batch, pred)[0]  # Access the total loss
+    # Compute loss using the custom loss function
+    loss = yolo_model.model.loss(pred, train_batch)[0]  # Access the total loss
 
     return loss
 
-def calculate_loss(enhanced_image, original_image, ground_truth, class_ids=[1, 8, 39, 5, 2, 15, 56, 41, 16, 3, 0, 60]):
+
+
+def calculate_loss(enhanced_image, ground_truth, yolo_model):
     """
     Calculates the difference in YOLO loss between enhanced and original images.
-
+s
     Args:
         enhanced_image (torch.Tensor): Batch of enhanced images in BCHW format.
         original_image (torch.Tensor): Batch of original images in BCHW format.
@@ -78,15 +75,9 @@ def calculate_loss(enhanced_image, original_image, ground_truth, class_ids=[1, 8
         torch.Tensor: The difference in loss (enhanced - original).
     """
     # Compute loss for enhanced images
-    loss_enhanced = _compute_single_loss(enhanced_image, ground_truth, class_ids, model)
+    loss_enhanced = _compute_single_loss(enhanced_image, ground_truth, yolo_model)
 
-    # Compute loss for original images
-    loss_original = _compute_single_loss(original_image, ground_truth, class_ids, model)
-
-    # Calculate the difference
-    loss_diff = loss_enhanced - loss_original
-
-    return loss_diff
+    return loss_enhanced
 
 def load_image(image_path, target_size=(640, 640)):
     """
@@ -119,44 +110,3 @@ def load_image(image_path, target_size=(640, 640)):
     image_tensor.requires_grad = True
 
     return image_tensor
-
-if __name__ == "__main__":
-    # Define the paths to your images
-    original_image_path = "DatasetExDark/ExDark_images/2015_00012.jpg"  # <-- Replace with your original image path
-    enhanced_image_path = "DatasetExDark/ExDark_images/2015_00003.png"  # <-- Replace with your enhanced image path
-
-    try:
-        # Load and preprocess the original image
-        original_image = load_image(original_image_path, target_size=(640, 640))
-        # Load and preprocess the enhanced image
-        enhanced_image = load_image(enhanced_image_path, target_size=(640, 640))
-    except Exception as e:
-        print(f"Error loading images: {e}")
-        exit(1)
-
-    # Stack images into batches if you have multiple images
-    # For single image pair, add batch dimension
-    original_image_batch = original_image.unsqueeze(0)  # Shape: [1, 3, 640, 640]
-    enhanced_image_batch = enhanced_image.unsqueeze(0)  # Shape: [1, 3, 640, 640]
-
-    # Example ground truth data
-    ground_truth = [
-        [
-            [1, 322, 470, 192, 352],
-            [2, 566, 400, 320, 320]
-        ]
-    ]
-
-    # Call the loss calculation function
-    loss_difference = calculate_loss(enhanced_image_batch, original_image_batch, ground_truth)
-
-    # Interpret the result
-    if loss_difference.item() < 0:
-        print(f"Enhanced image has lower loss by {abs(loss_difference.item())}")
-    elif loss_difference.item() > 0:
-        print(f"Enhanced image has higher loss by {loss_difference.item()}")
-    else:
-        print("Enhanced and original images have the same loss.")
-
-    # Additionally, print the loss difference
-    print("Loss Difference (Enhanced - Original):", loss_difference.item())

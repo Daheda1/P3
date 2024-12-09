@@ -8,15 +8,13 @@ from modelparts.imagePreprocessing import scale_image, scale_bounding_boxes, pad
 import torchvision.transforms.functional as TF
 
 
-
-
 class ExDark:
     def __init__(self, filepath):
         self.annotations = os.path.join(filepath, "ExDark_Anno/")
         self.images = os.path.join(filepath, "ExDark_images/")
         self.image_list = os.path.join(filepath, "imageclasslist.txt")
 
-    def load_image_paths_and_classes(self, class_filter=None, light_filter=None, location_filter=None, split_filter=None):
+    def load_image_paths_and_classes(self, config, split_filter=None):
         """
         Loads image paths and classes with filters.
         
@@ -41,9 +39,9 @@ class ExDark:
             split = int(parts[4])
             
             # Apply filters
-            if (class_filter is None or img_class in class_filter) and \
-               (light_filter is None or light_condition in light_filter) and \
-               (location_filter is None or location in location_filter) and \
+            if (config.class_filter is None or img_class in config.class_filter) and \
+               (config.light_filter is None or light_condition in config.light_filter) and \
+               (config.location_filter is None or location in config.location_filter) and \
                (split_filter is None or split in split_filter):
                 image_paths.append(os.path.join(image_name))
                 image_classes.append(img_class)

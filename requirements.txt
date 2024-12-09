@@ -3,3 +3,6 @@ torchvision
 numpy
 opencv-python
 ultralytics
+torchmetrics
+matplotlib
+torchmetrics

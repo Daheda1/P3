@@ -14,4 +14,4 @@ num_gpus=1
 #SBATCH --ntasks=$num_gpus
 #SBATCH --gres=gpu:$num_gpus
 
-singularity exec /ceph/container/pytorch/pytorch_24.03.sif bash -c "pip install --user -r requirements.txt && python train.py"
+singularity exec /ceph/container/pytorch/pytorch_24.03.sif bash -c "pip install --user -r requirements.txt && python val.py"

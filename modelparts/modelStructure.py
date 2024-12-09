@@ -37,7 +37,7 @@ class UNet(nn.Module):
         self.dec1 = conv_block(128, 64)
         
         self.final = nn.Conv2d(64, out_channels, kernel_size=1)
-        self.activation = nn.Sigmoid()  # Add Sigmoid activation
+        self.activation = nn.Sigmoid()
     
     def forward(self, x):
         
@@ -72,5 +72,5 @@ class UNet(nn.Module):
         dec1 = self.dec1(merge1)
         
         out = self.final(dec1)
-        out = self.activation(out)  # Apply Sigmoid activation
+        out = self.activation(out)
         return out

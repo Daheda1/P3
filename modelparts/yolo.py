@@ -1,15 +1,48 @@
 # modelparts/yolo.py
 
 from ultralytics import YOLO
-import torch
-import logging
 from PIL import Image
 import torchvision.transforms.functional as TF
+from ultralytics import YOLO
+from ultralytics.utils import IterableSimpleNamespace
+from PIL import Image
+import sys
+import os
+import logging
+from modelparts.ultralyticsmodification import CustomDetectionModel
 
-# Initialize the YOLO model globally to reuse across function calls
-yolo_model = YOLO("yolo11n.pt")
+logging.getLogger("ultralytics").setLevel(logging.CRITICAL)
 
-def yolo_object(tensor_image, class_ids=[1, 8, 39, 5, 2, 15, 56, 41, 16, 3, 0, 60]):
+def init_yolo(class_ids):
+    with open(os.devnull, 'w') as f:
+        old_stdout = sys.stdout
+        sys.stdout = f
+        model = YOLO("yolo11n.pt", verbose=False)  # Initialize model
+        sys.stdout = old_stdout  # Restore output
+
+    # Create custom model without passing anchors
+    custom_model = CustomDetectionModel(
+        cfg=model.model.yaml,
+        ch=3,
+        nc=model.model.yaml['nc'],
+        desired_classes=class_ids,
+        args=IterableSimpleNamespace(box=7.5, cls=0.5, dfl=1.5)
+    )
+
+    # Load pretrained weights into custom model
+    custom_model.load_state_dict(model.model.state_dict())
+
+    # Replace the model's default model with custom_model
+    model.model = custom_model
+
+    # Set model to training mode and adjust settings
+    model.model.requires_grad_()
+    model.model.train()
+
+    return model
+
+
+def yolo_object(tensor_image, yolo_model, target_size, class_ids):
     """
     Performs YOLO object detection on a Torch Tensor image.
 
@@ -21,8 +54,6 @@ def yolo_object(tensor_image, class_ids=[1, 8, 39, 5, 2, 15, 56, 41, 16, 3, 0, 6
         list of list of dict: A nested list where each inner list corresponds to detections for an image.
                               Each detection is a dictionary with 'class_id', 'confidence', and 'bbox'.
     """
-    tensor_image = tensor_image
-
 
     if tensor_image is None or tensor_image.numel() == 0:
         logging.error("Invalid tensor image input for YOLO object detection.")
@@ -52,6 +83,12 @@ def yolo_object(tensor_image, class_ids=[1, 8, 39, 5, 2, 15, 56, 41, 16, 3, 0, 6
                     cls_id = int(box.cls[0].item())
                     conf = float(box.conf[0].item())
                     x1, y1, x2, y2 = box.xyxy[0].tolist()
+                    x1 = int(x1)/target_size[0]
+                    y1 = int(y1)/target_size[1]
+                    x2 = int(x2)/target_size[0]
+                    y2 = int(y2)/target_size[1]
+
+
                 except AttributeError as e:
                     logging.error(f"Error parsing detection box: {e}")
                     continue
@@ -116,7 +153,7 @@ def visualize_image(image_tensor, output_dir="visualizations", batch_idx=0, save
 
 if __name__ == "__main__":
     # Prepare your input tensor
-    image_path = "DatasetExDark/ExDark_images/2015_07353.png"
+    image_path = "DatasetExDark/ExDark_images/2015_00001.png"
     pil_image = Image.open(image_path)
     input_tensor = TF.to_tensor(pil_image).unsqueeze(0)  # Add batch dimension
     input_tensor = TF.resize(input_tensor, [640, 640])  # Resize to YOLO's input size

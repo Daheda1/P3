@@ -1,8 +1,10 @@
 # train.py
 
+import argparse
 import torch
 import torch.optim as optim
 from torch.utils.data import DataLoader
+import torch.nn as nn
 import os
 
 # Import your existing modules
@@ -10,25 +12,40 @@ from modelparts.loss import calculate_loss
 from modelparts.loadData import ExDark, ExDarkDataset, custom_collate_fn
 from modelparts.modelStructure import UNet
 from modelparts.validation import validate_epoch
+from modelparts.yolo import init_yolo
 
 # Checkpointing imports
 import glob
+import logging
+
+logging.getLogger("ultralytics").setLevel(logging.CRITICAL)
+
+import argparse
+import inspect
+import sys
+import configs
 
 
-from torchvision.utils import save_image
-import random
+# Dynamically load all configuration classes from configs.py
+def load_configs(module):
+    return {
+        name: cls
+        for name, cls in inspect.getmembers(module, inspect.isclass)
+        if cls.__module__ == module.__name__  # Ensure classes are from the configs module
+    }
+image_loss_fn = nn.L1Loss()
 
-def train_model(model, dataloader, validation_loader, optimizer, num_epochs, dataset, device, checkpoint_dir):
+def train_model(model, yolo_model, dataloader, validation_loader, optimizer, config):
     print("Starting training...")
     model.train()
 
     # Initialize checkpointing
-    os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_files = glob.glob(os.path.join(checkpoint_dir, 'checkpoint_epoch_*.pth'))
+    os.makedirs(config.experiment_name, exist_ok=True)
+    checkpoint_files = glob.glob(os.path.join(config.experiment_name, 'checkpoint_epoch_*.pth'))
     if checkpoint_files:
         # Find the latest checkpoint
         latest_checkpoint = max(checkpoint_files, key=os.path.getctime)
-        checkpoint = torch.load(latest_checkpoint, map_location=device)
+        checkpoint = torch.load(latest_checkpoint, map_location=config.device)
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
@@ -37,17 +54,19 @@ def train_model(model, dataloader, validation_loader, optimizer, num_epochs, dat
         start_epoch = 0
         print("No checkpoint found. Starting training from scratch.")
 
-    for epoch in range(start_epoch, num_epochs):
+    for epoch in range(start_epoch, config.num_epochs):
         total_loss = 0
         for batch_idx, batch in enumerate(dataloader):
-            image = batch['image'].to(device)
+            image = batch['image'].to(config.device)
+            original_image = batch['Org_image']
             ground_truth = batch['ground_truth']
-            padding = batch['padding']
-            org_image = batch['Org_image']
             optimizer.zero_grad()
             output = model(image)
-            loss = calculate_loss(output, org_image, ground_truth)
-            print(f"Epoch [{epoch+1}/{num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], Loss: {loss.item():.4f}")
+            if epoch in config.alt_loss_pattern:
+                loss = image_loss_fn(output, original_image)
+            else:
+                loss = calculate_loss(output, ground_truth, yolo_model)
+            print(f"Epoch [{epoch+1}/{config.num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], Loss: {loss.item():.4f}")
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
@@ -55,11 +74,10 @@ def train_model(model, dataloader, validation_loader, optimizer, num_epochs, dat
         average_loss = total_loss / len(dataloader)
         print(f"Epoch {epoch+1} Average Loss: {average_loss:.4f}")
 
-        #save_epoch_outputs(model, dataloader.dataset, epoch, device)
-        #validate_epoch(validation_loader, model, device)
+        validate_epoch(model, yolo_model, epoch, validation_loader, calculate_loss, average_loss, config)
 
         # Save checkpoint after each epoch
-        checkpoint_path = os.path.join(checkpoint_dir, f'checkpoint_epoch_{epoch+1}.pth')
+        checkpoint_path = os.path.join(config.experiment_name, f'checkpoint_epoch_{epoch+1}.pth')
         torch.save({
             'epoch': epoch,
             'model_state_dict': model.state_dict(),
@@ -68,89 +86,56 @@ def train_model(model, dataloader, validation_loader, optimizer, num_epochs, dat
         }, checkpoint_path)
         print(f"Checkpoint saved at {checkpoint_path}")
 
-def save_epoch_outputs(model, dataset, epoch, device, output_dir="epoch_output_4"):
-    """Save outputs of 5 random images and model checkpoint for the epoch."""
-    # Create directory for the epoch
-    epoch_dir = os.path.join(output_dir, f"Epoch{epoch+1}")
-    os.makedirs(epoch_dir, exist_ok=True)
 
-    # Select 5 random images
-    random_images = random.sample(range(len(dataset)), 3)
-    for idx in random_images:
-        sample = dataset[idx]
-        image = sample['image'].unsqueeze(0).to(device)  # Add batch dimension
-        image_name = sample['image_name']
-
-        with torch.no_grad():
-            model.eval()  # Set model to evaluation mode
-            output = model(image)
-            model.train()  # Reset model to training mode
-
-        # Save input and output images
-        input_image_path = os.path.join(epoch_dir, f"{os.path.splitext(image_name)[0]}_input.png")
-        output_image_path = os.path.join(epoch_dir, f"{os.path.splitext(image_name)[0]}_output.png")
-
-        # Save input and output
-        save_image(image.squeeze(0), input_image_path)
-        save_image(output.squeeze(0).cpu(), output_image_path)
-
-    # Save the model checkpoint
-    model_path = os.path.join(epoch_dir, f"model_epoch_{epoch+1}.pth")
-    torch.save(model.state_dict(), model_path)
 
 if __name__ == "__main__":
+    CONFIG_MAP = load_configs(configs)
+    # Parse command-line arguments
+    parser = argparse.ArgumentParser(description="Train a UNet model on ExDark dataset with configurable settings")
+    parser.add_argument("--config", type=str, default="base", choices=CONFIG_MAP.keys(), help="Configuration to use")
+    args = parser.parse_args()
+
+    # Load the selected configuration
+    config_class = CONFIG_MAP[args.config]
+    config = config_class()
+
     # Initialize dataset
-    dataset_path = "DatasetExDark"
-    batch_size = 32
-    num_workers = 8
-    target_size = (640, 640)
+    class_ids = [1, 8, 39, 5, 2, 15, 56, 41, 16, 3, 0, 60]
+    config.class_ids = [class_ids[i - 1] for i in config.class_filter]
 
+    yolo_model = init_yolo(class_ids)
 
-    dataset = ExDark(filepath=dataset_path)
-    image_paths = dataset.load_image_paths_and_classes(split_filter=[1], class_filter=[1])[:2]  # Adjust filters as needed
-    exdark_dataset = ExDarkDataset(dataset, image_paths, target_size)
+    dataset = ExDark(filepath=config.dataset_path)
+    image_paths = dataset.load_image_paths_and_classes(config, split_filter=[1])
+    exdark_dataset = ExDarkDataset(dataset, image_paths, config.target_size)
 
-    # Create data loader
     dataloader = DataLoader(
         exdark_dataset,
-        batch_size=batch_size,
+        batch_size=config.batch_size,
         shuffle=True,
-        num_workers=num_workers,
+        num_workers=config.num_workers,
         collate_fn=custom_collate_fn
     )
 
-    # Load validation image paths without slicing to use the entire validation set
-    image_paths = dataset.load_image_paths_and_classes(split_filter=[2], class_filter=[1])[:2]
+    validation_image_paths = dataset.load_image_paths_and_classes(config, split_filter=[2])
+    validation_dataset = ExDarkDataset(dataset, validation_image_paths, config.target_size)
 
-    # Create ExDarkDataset for validation
-    validation_dataset = ExDarkDataset(dataset, image_paths, target_size)
-
-    # Create DataLoader for validation
     validation_loader = DataLoader(
         validation_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
-        collate_fn=custom_collate_fn  # Ensure custom_collate_fn is imported or defined in this scope
+        batch_size=config.batch_size,
+        shuffle=True,
+        num_workers=config.num_workers,
+        collate_fn=custom_collate_fn
     )
 
-    # Initialize model and optimizer
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = UNet(in_channels=3, out_channels=3).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=1e-5)
+    model = UNet(in_channels=3, out_channels=3).to(config.device)
+    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
 
-    # Start training with checkpointing
     train_model(
         model=model,
+        yolo_model=yolo_model,
         dataloader=dataloader,
         validation_loader=validation_loader,
         optimizer=optimizer,
-        num_epochs=15,
-        dataset=dataset,
-        device=device,
-        checkpoint_dir='checkpoint_4'  # Directory to save checkpoints
+        config=config
     )
-
-
-
-
