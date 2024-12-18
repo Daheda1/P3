@@ -66,6 +66,7 @@ def train_model(model, yolo_model, dataloader, validation_loader, optimizer, con
                 loss = image_loss_fn(output, original_image)
             else:
                 loss = calculate_loss(output, ground_truth, yolo_model)
+                loss = loss / len(image)
             print(f"Epoch [{epoch+1}/{config.num_epochs}], Batch [{batch_idx+1}/{len(dataloader)}], Loss: {loss.item():.4f}")
             loss.backward()
             optimizer.step()
@@ -92,7 +93,7 @@ if __name__ == "__main__":
     CONFIG_MAP = load_configs(configs)
     # Parse command-line arguments
     parser = argparse.ArgumentParser(description="Train a UNet model on ExDark dataset with configurable settings")
-    parser.add_argument("--config", type=str, default="base", choices=CONFIG_MAP.keys(), help="Configuration to use")
+    parser.add_argument("--config", type=str, default="BaseConfig", choices=CONFIG_MAP.keys(), help="Configuration to use")
     args = parser.parse_args()
 
     # Load the selected configuration
@@ -106,7 +107,7 @@ if __name__ == "__main__":
     yolo_model = init_yolo(class_ids)
 
     dataset = ExDark(filepath=config.dataset_path)
-    image_paths = dataset.load_image_paths_and_classes(config, split_filter=[1])
+    image_paths = dataset.load_image_paths_and_classes(config, split_filter=[1])[:2]
     exdark_dataset = ExDarkDataset(dataset, image_paths, config.target_size)
 
     dataloader = DataLoader(
@@ -117,19 +118,19 @@ if __name__ == "__main__":
         collate_fn=custom_collate_fn
     )
 
-    validation_image_paths = dataset.load_image_paths_and_classes(config, split_filter=[2])
+    validation_image_paths = dataset.load_image_paths_and_classes(config, split_filter=[2])[:2]
     validation_dataset = ExDarkDataset(dataset, validation_image_paths, config.target_size)
 
     validation_loader = DataLoader(
         validation_dataset,
         batch_size=config.batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=config.num_workers,
         collate_fn=custom_collate_fn
     )
 
     model = UNet(in_channels=3, out_channels=3).to(config.device)
-    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
+    optimizer = optim.Adam(model.parameters(), lr=config.learning_rate, weight_decay=config.weight_decay)
 
     train_model(
         model=model,

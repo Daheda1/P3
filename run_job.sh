@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=U-net
+#SBATCH --job-name=EvenSmallerModel
 #SBATCH --output=result_%j.out
 #SBATCH --error=error_%j.err
 #SBATCH --time=12:00:00
@@ -14,4 +14,4 @@ num_gpus=1
 #SBATCH --ntasks=$num_gpus
 #SBATCH --gres=gpu:$num_gpus
 
-singularity exec /ceph/container/pytorch/pytorch_24.03.sif bash -c "pip install --user -r requirements.txt && python val.py"
+singularity exec /ceph/container/pytorch/pytorch_24.03.sif bash -c "pip install --user -r requirements.txt && python train.py --config EvenSmallerModel"

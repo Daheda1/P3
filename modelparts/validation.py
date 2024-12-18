@@ -1,10 +1,7 @@
 import csv
 import torch
-import numpy as np
 from torch.utils.data import DataLoader
-from ultralytics import YOLO
 from torchmetrics.detection.mean_ap import MeanAveragePrecision
-from modelparts.loss import calculate_loss
 from modelparts.yolo import yolo_object
 import os
 import matplotlib.pyplot as plt

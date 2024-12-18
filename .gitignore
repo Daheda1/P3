@@ -1,3 +1,8 @@
 **DatasetExDark/ExDark_Anno
 **DatasetExDark/ExDark_images
 **DatasetExDark/
+.DS_Store
+*.png
+*.jpg
+*.jepg
+*.pth

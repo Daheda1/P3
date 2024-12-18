@@ -74,3 +74,5 @@ class UNet(nn.Module):
         out = self.final(dec1)
         out = self.activation(out)
         return out
+    
+

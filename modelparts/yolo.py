@@ -78,7 +78,6 @@ def yolo_object(tensor_image, yolo_model, target_size, class_ids):
         image_detections = []
         if hasattr(result, 'boxes') and result.boxes is not None:
             for box in result.boxes:
-                # Extract attributes safely
                 try:
                     cls_id = int(box.cls[0].item())
                     conf = float(box.conf[0].item())

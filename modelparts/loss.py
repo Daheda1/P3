@@ -1,11 +1,4 @@
-from ultralytics import YOLO
-from ultralytics.utils import IterableSimpleNamespace
 import torch
-from PIL import Image
-import torchvision.transforms as transforms
-import sys
-import os
-import logging
 
 
 def _compute_single_loss(image, ground_truth, yolo_model):
@@ -78,35 +71,3 @@ s
     loss_enhanced = _compute_single_loss(enhanced_image, ground_truth, yolo_model)
 
     return loss_enhanced
-
-def load_image(image_path, target_size=(640, 640)):
-    """
-    Load an image from the specified path and preprocess it.
-
-    Args:
-        image_path (str): Path to the image file.
-        target_size (tuple): Desired image size as (height, width).
-
-    Returns:
-        torch.Tensor: Preprocessed image tensor of shape [C, H, W].
-    """
-    if not os.path.exists(image_path):
-        raise FileNotFoundError(f"Image file not found: {image_path}")
-
-    # Define the transformation pipeline
-    transform = transforms.Compose([
-        transforms.Resize(target_size),            # Resize image
-        transforms.ToTensor(),                    # Convert to tensor and scale [0, 1]
-        # Optionally, add normalization
-        # transforms.Normalize(mean=[0.485, 0.456, 0.406],
-        #                      std=[0.229, 0.224, 0.225]),
-    ])
-
-    # Open and transform the image
-    image = Image.open(image_path).convert('RGB')  # Ensure 3 channels
-    image_tensor = transform(image)                # Shape: [3, H, W]
-
-    # Ensure the tensor requires gradients if needed
-    image_tensor.requires_grad = True
-
-    return image_tensor

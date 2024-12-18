@@ -1,5 +1,7 @@
 # configs.py
 import torch
+from modelparts.modelStructure import UNet
+
 class BaseConfig:   
     dataset_path = "DatasetExDark"
     experiment_name = "base_experiment"
@@ -12,15 +14,8 @@ class BaseConfig:
     location_filter = None                      #Indoor(1), Outdoor(2)
     num_epochs = 15
     learning_rate = 1e-5
+    weight_decay = 0.0
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
-class SmallBatchConfig(BaseConfig):
-    batch_size = 16
-    experiment_name = "small_batch_experiment"
-
-class HighResConfig(BaseConfig):
-    target_size = (1280, 1280)
-    experiment_name = "high_res_experiment"
 
 
 # Base with Indoor only
@@ -32,7 +27,6 @@ class IndoorConfig(BaseConfig):
 class OutdoorConfig(BaseConfig):
     location_filter = [2]  # Outdoor
     experiment_name = "base_outdoor_experiment"
-
 
 
 
@@ -107,3 +101,58 @@ class HigherLearningRate(BaseConfig):
     class_filter = [1,2]
     learning_rate = 1e-6
     experiment_name = "higher_learning_rate_experiment"
+
+class SmallBatchConfig(BaseConfig):
+    batch_size = 16
+    experiment_name = "small_batch_experiment"
+
+class SmallerBatchConfig(BaseConfig):
+    batch_size = 8
+    experiment_name = "smaller_batch_experiment"
+
+class HighResConfig(BaseConfig):
+    target_size = (1280, 1280)
+    experiment_name = "high_res_experiment"
+
+class LowResConfig(BaseConfig):
+    target_size = (320, 320)
+    experiment_name = "low_res_experiment"
+
+class ExtendedEpochConfig(BaseConfig):
+    num_epochs = 50
+    experiment_name = "extended_epoch_experiment"
+
+class EvenLowerLearningRate(BaseConfig):
+    learning_rate = 1e-3
+    experiment_name = "even_lower_learning_rate_experiment"
+
+class WeightDecayStandard(BaseConfig):
+    weight_decay = 1e-4
+    experiment_name = "weight_decay_standard_experiment"
+
+class WeightDecayLow(BaseConfig):
+    weight_decay = 1e-5
+    experiment_name = "weight_decay_low_experiment"
+
+class WeightDecayHigh(BaseConfig):
+    weight_decay = 1e-3
+    experiment_name = "weight_decay_high_experiment"
+
+class WeightDecayAggressive(BaseConfig):
+    weight_decay = 1e-2
+    experiment_name = "weight_decay_aggressive_experiment"
+
+class WeightDecayMinimal(BaseConfig):
+    weight_decay = 1e-6
+    experiment_name = "weight_decay_minimal_experiment"
+
+
+class SmallerModel(BaseConfig):
+    experiment_name = "smaller_model_experiment"
+
+class EvenSmallerModel(BaseConfig):
+    experiment_name = "even_smaller_model_experiment"
+
+class FullDatasetMultiConfig(BaseConfig):
+    experiment_name = "full_dataset_multi_experiment"
+    class_filter = [1,2,3,4,5,6,7,8,9,10,11,12]
